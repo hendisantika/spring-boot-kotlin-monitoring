@@ -48,4 +48,13 @@ class MessageController(val meterRegistry: MeterRegistry) {
         return "ok"
     }
 
+    @GetMapping("/ko")
+    fun otpFail(
+    ): String {
+        logger.info { "Otp ko" }
+        return "ko"
+    }
+
+
+
 }
