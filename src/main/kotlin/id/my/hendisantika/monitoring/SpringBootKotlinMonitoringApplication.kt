@@ -56,5 +56,16 @@ class MessageController(val meterRegistry: MeterRegistry) {
     }
 
 
-
+    @GetMapping("/exception")
+    fun exception(
+    ): String {
+        logger.info { "Otp Exception" }
+        val randomTime = (0..5000).random()
+        try {
+            Thread.sleep(randomTime.toLong())
+        } catch (e: InterruptedException) {
+        }
+        throw NullPointerException("crash")
+        return "exception"
+    }
 }
