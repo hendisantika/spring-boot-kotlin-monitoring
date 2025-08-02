@@ -2,6 +2,7 @@ package id.my.hendisantika.monitoring
 
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.observation.annotation.Observed
+import mu.KotlinLogging
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
 import org.springframework.http.HttpStatus

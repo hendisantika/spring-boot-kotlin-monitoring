@@ -26,7 +26,7 @@ dependencies {
     implementation("io.micrometer:micrometer-tracing-bridge-brave")
     implementation("io.zipkin.reporter2:zipkin-reporter-brave")
     developmentOnly("com.github.loki4j:loki-logback-appender:1.3.2")
-    developmentOnly("io.github.microutils:kotlin-logging-jvm:3.0.4")
+    implementation("io.github.microutils:kotlin-logging-jvm:3.0.4")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
     developmentOnly("org.springframework.boot:spring-boot-docker-compose")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
