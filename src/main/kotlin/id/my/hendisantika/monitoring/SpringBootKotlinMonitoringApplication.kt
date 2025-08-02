@@ -1,11 +1,10 @@
 package id.my.hendisantika.monitoring
 
+import io.micrometer.core.instrument.MeterRegistry
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
 import org.springframework.http.HttpStatus
-import org.springframework.web.bind.annotation.ControllerAdvice
-import org.springframework.web.bind.annotation.ExceptionHandler
-import org.springframework.web.bind.annotation.ResponseStatus
+import org.springframework.web.bind.annotation.*
 
 @SpringBootApplication
 class SpringBootKotlinMonitoringApplication
@@ -24,4 +23,13 @@ class GlobalExceptionHandler {
     fun customerNotFound(exception: RuntimeException) {
         logger.error(exception) { "Exception" }
     }
+}
+
+@RestController
+@RequestMapping("/message")
+class MessageController(val meterRegistry: MeterRegistry) {
+
+    private val logger = KotlinLogging.logger {}
+
+
 }
