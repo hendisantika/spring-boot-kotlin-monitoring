@@ -1,171 +1,215 @@
-# Spring Web Application using Kotlin
+# Spring Boot Kotlin Monitoring
 
-This repository contains an example project using Spring Boot 3 mvc modeling logging + tracing + metrics
-solution using Grafana single source of truth to be able to track any problem in our system.
+[![Java CI with Gradle](https://github.com/hendisantika/spring-boot-kotlin-monitoring/actions/workflows/gradle.yml/badge.svg)](https://github.com/hendisantika/spring-boot-kotlin-monitoring/actions/workflows/gradle.yml)
+![JDK](https://img.shields.io/badge/JDK-25-orange?logo=openjdk)
+![Kotlin](https://img.shields.io/badge/Kotlin-2.4-7F52FF?logo=kotlin)
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1-6DB33F?logo=springboot)
+![Gradle](https://img.shields.io/badge/Gradle-9.3-02303A?logo=gradle)
 
-image::images/monitoring-flow.png[]
+An example Spring Boot 4 MVC application written in Kotlin that wires **logs + traces + metrics** together, using
+Grafana as the single source of truth so you can jump from any signal to the others and track down problems in your
+system.
 
-* Grafana Loki : Ingesting logs of your application using logback appender (logback-spring.mxl)
+![Monitoring flow](images/monitoring-flow.png)
 
-* Grafana Tempo: tracing storage tool (from grafana team)
+- **Grafana Loki**: ingests the application's logs through the Logback appender (`logback-spring.xml`).
+- **Grafana Tempo**: stores traces (from the Grafana team).
+- **Prometheus**: a time series database, one of the best options for storing your app's metrics.
+- **Exemplars**: references to data outside of the metric set. A common use case is the ID of a trace.
+  - Example metric with a `trace_id`:
 
-* Prometheus: Prometheus is one of the best time series database and is considered best solution to store your app's
-  metrics.
+    ```
+    foo_bucket{le="1"} 11 # {trace_id="KOO5S4vxi0o"} 0.67
+    ```
 
-* Exemplejar: references to data outside of the MetricSet. A common use case are IDs of program traces.
-  **  Example metrics using trace_id:
+  - Example Spring Boot metric:
 
-  foo_bucket{le="1"} 11 # {trace_id="KOO5S4vxi0o"} 0.67
+    ```
+    http_server_requests_seconds_bucket{error="none",exception="none",method="GET",outcome="SUCCESS",status="200",uri="/actuator/prometheus",le="0.1"} 27903.0 # {span_id="b32c07399f9c9a78",trace_id="63e61e02ccc4ea83b32c07399f9c9a78"} 0.004050792 1676025346.167
+    ```
 
-** Example Spring boot metric ():
+## Tech stack
 
-    http_server_requests_seconds_bucket{error="none",exception="none",method="GET",outcome="SUCCESS",status="200"zuri="/actuator/prometheus",le="0.1"} 27903.0 # {span_id="b32c07399f9c9a78",trace_id="63e61e02ccc4ea83b32c07399f9c9a78"} 0.004050792 1676025346.167
+| Component           | Version / Library                                                            |
+|---------------------|------------------------------------------------------------------------------|
+| JDK                 | 25 (Gradle toolchain)                                                        |
+| Kotlin              | 2.4.x                                                                        |
+| Spring Boot         | 4.1.x (`webmvc`, `actuator`, `aspectj`, `zipkin`)                            |
+| Build               | Gradle 9.3 (wrapper)                                                         |
+| Metrics             | Micrometer + `micrometer-registry-prometheus`                                |
+| Tracing             | Micrometer Tracing with the Brave bridge, reported to Tempo over Zipkin      |
+| Logs                | `kotlin-logging` + `loki-logback-appender`                                   |
+| Infrastructure      | Docker Compose: Grafana, Loki, Tempo, Prometheus                             |
 
-# Infraestructure: docker compose
+## Prerequisites
 
-Docker compose file exits in the project to make easier run all containers needed in the infrastructure. Let me show you
-main configuration
+- JDK 25 (Gradle will provision it through the toolchain if it isn't installed locally)
+- Docker with Docker Compose
 
-image::images/docker-compose.png[]
+## Infrastructure: Docker Compose
 
-- Grafana tempo: docker container Grafana Tempo. It must configure Zipkin as main receiver to be able to store tracing
-  info in its storage.
+The project ships a `compose.yml` that starts every container the infrastructure needs.
 
-image::images/tempo_config.png[]
+![Docker compose](images/docker-compose.png)
 
-- Grafana loki: docker container Grafana Loki. It will store logging info received from logback-spring appender defined
-  in applitacion (logback-spring.xml)
+- **Grafana Tempo**: has to be configured with Zipkin as its receiver so it can store the tracing data.
 
-- Prometheus: docker container Prometheus. It will store all application's metrics provided by Spring boot actuator
-  endpoint (exemplejar included)
+  ![Tempo config](images/tempo_config.png)
 
-image::images/prometheus_config.png[]
+- **Grafana Loki**: stores the logs sent by the Logback appender defined in the application (`logback-spring.xml`).
+- **Prometheus**: stores all of the application's metrics exposed by the Spring Boot Actuator endpoint, exemplars
+  included.
 
-- Grafana: docker container Grafana. It will show all metrics/logging/tracing info inside a main dashboard called Logs,
-  Traces, Metrics
+  ![Prometheus config](images/prometheus_config.png)
 
-image::images/grafana-board.png[]
+- **Grafana**: shows all metrics, logs and traces on a provisioned dashboard called *Logs, Traces, Metrics*.
 
-# How it works
+  ![Grafana board](images/grafana-board.png)
 
-Metrics, logging and tracing must use trace_id to be able to navigate from one source to another
-making easy to evaluate the cause of on exception in our system.
+| Service    | URL                                 |
+|------------|-------------------------------------|
+| App        | http://localhost:8080               |
+| Grafana    | http://localhost:3000               |
+| Prometheus | http://localhost:9090               |
+| Loki       | http://localhost:3100               |
+| Tempo      | http://localhost:9411 (Zipkin API)  |
 
-## Metrics
+## How it works
 
-### Spring boot metrics
+Metrics, logs and traces all carry the `trace_id`, so you can navigate from one source to another and find the cause
+of an exception in the system.
 
-Spring boot metrics provides a metrics endpoint that can be used diagnostically to examine the metrics collected by an
-application. You can receive metrics of your application, it is possible to correlate this information with a trace_id
-sending percentiles-histogram information Out of the box ( must be enable in application.properties)
+### Metrics
 
-management.metrics.distribution.percentiles-histogram.http.server.requests= true
+#### Spring Boot metrics
 
-Now when we create and http call to Prometheus endpoint (http://localhost:8081/actuator/prometheus)
-using accept header with value "application/openmetrics-text; version=1.0.0; charset=utf-8" percentiles info is attached
-with trace_id and span_id info:
+Spring Boot exposes a metrics endpoint you can use to examine the metrics collected by the application. To correlate
+them with a `trace_id`, enable percentile histograms in `application.properties`:
 
-image::images/prometheus_trace_id.png[]
+```properties
+management.metrics.distribution.percentiles-histogram.http.server.requests=true
+```
 
-### Prometheus
+When you call the Prometheus endpoint (http://localhost:8080/actuator/prometheus) with the
+`Accept: application/openmetrics-text; version=1.0.0; charset=utf-8` header, the percentile buckets include the
+`trace_id` and `span_id`:
 
-Prometheus database will scrape actuator info and store it in database using Exemplejar info (trace_id and span_id):
-docker/prometheus/prometheus.yml
+![Prometheus trace id](images/prometheus_trace_id.png)
 
-image::images/prometheus_config.png[]
+#### Prometheus
 
-## Logging
+Prometheus scrapes the actuator endpoint and stores the exemplars (`trace_id` and `span_id`). See
+`docker/prometheus/prometheus.yml`.
 
-Grafana loki will store all application's logs. We define logback-spring.xml (main/resources) using loki appender.It is
-very important to define tags to be added per log line. These labels will be used
-later to be able to correlate log/tracing (traceID label is a must)
+![Prometheus config](images/prometheus_config.png)
 
-      <pattern>app=${appName},host=${HOSTNAME},traceID=%X{traceId:-NONE},level=%level, class=%C </pattern>
+### Logging
 
-Loki label generated
+Grafana Loki stores all of the application's logs. `logback-spring.xml` (in `src/main/resources`) uses the Loki
+appender. It is important to define the labels attached to each log line, because they are used later to correlate
+logs and traces (the `traceID` label is a must):
 
-image::images/loki_labels.png[]
+```xml
+<pattern>app=${appName},host=${HOSTNAME},traceID=%X{traceId:-NONE},level=%level, class=%C</pattern>
+```
 
-## Tracing
+Generated Loki labels:
 
-Grafana Tempo will store all Tracing info (traceID is attached out of the box)
+![Loki labels](images/loki_labels.png)
 
-# Grafana Configuration in detail
+### Tracing
 
-Let's have a look main configuration used in Grafana to be able to connect trace_id between layers
+Grafana Tempo stores all of the tracing data (the `traceID` is attached out of the box).
 
-- Prometheus: It defines how to use exemplejars to be able to navigate from metrics to tracing
+## Grafana configuration in detail
 
-image::images/prometheus.png[]
+This is the main Grafana configuration that links the `trace_id` across the three layers.
 
-image::images/exemple-jars.png[]
+- **Prometheus**: defines how exemplars are used to navigate from metrics to traces.
 
-- Tempo: it defines loki query to navigate from trace to log
+  ![Prometheus datasource](images/prometheus.png)
+  ![Exemplars](images/exemple-jars.png)
 
-It needs to correlate service.name (tracing label) --> app (log label defined in logback pattern)
+- **Tempo**: defines the Loki query that navigates from a trace to its logs. It correlates `service.name` (tracing
+  label) with `app` (the log label defined in the Logback pattern).
 
-image::images/logback-patterns.png[]
+  ![Logback patterns](images/logback-patterns.png)
+  ![Tracing to logging](images/tracing-logging.png)
+  ![Tempo datasource](images/tempo.png)
 
-image::images/tracing-logging.png[]
+- **Loki**: defines a derived field that navigates from a log line to its trace.
 
-image::images/tempo.png[]
+  ![Loki datasource](images/loki.png)
+  ![Logging to tracing](images/logging-tracing.png)
 
-- Loki: It defines defered field to navigate from log to trace
+## How to run the example
 
-image::images/loki.png[]
-image::images/logging-tracing.png[]
+1. Start the infrastructure from the project root:
 
-# How to run the example
+   ```shell
+   docker compose up -d
+   ```
 
-* Run docker container inside main directory
+   ![Containers](images/containers.png)
 
-  docker-compose up
+2. Run the Spring Boot application:
 
-image::images/containers.png[]
+   ```shell
+   ./gradlew bootRun
+   ```
 
-* Run Spring boot application
+   ![Spring Boot](images/spring-boot.png)
 
-image::images/spring-boot.png[]
+3. Generate some traffic by calling these endpoints a few times:
 
-* Test your metrics creating serveral http calls to
-  ** http://localhost:8081/message/ok
-  ** http://localhost:8081/message/ko
-  ** http://localhost:8081/message/exception
+   - http://localhost:8080/message/ok
+   - http://localhost:8080/message/ko
+   - http://localhost:8080/message/exception
 
-* Open Grafana and go to the main panel (Logs, Traces, Metrics) http://localhost:3000:
+   ```shell
+   for i in $(seq 1 20); do
+     curl -s localhost:8080/message/ok; curl -s localhost:8080/message/ko; curl -s localhost:8080/message/exception
+   done
+   ```
 
-image::images/grafana-main.png[]
-image::images/grafana-main2.png[]
+4. Open Grafana at http://localhost:3000 and go to the *Logs, Traces, Metrics* dashboard:
 
-# Spring boot 3.0: new Observality approach
+   ![Grafana main](images/grafana-main.png)
+   ![Grafana main 2](images/grafana-main2.png)
 
-What is observability? In our understanding, it is "how well you can understand the internals of your system by
-examining its outputs". We believe that the interconnection between metrics, logging, and distributed tracing gives you
-the ability to reason about the state of your system in order to debug exceptions and latency in your applications. You
-can watch more about what we think observability is in this episode of Enlightning with Jonatan Ivanov.
+## Build and test
 
-To add observation features to your application, spring-boot-starter-actuator is a must (to add Micrometer to the
-classpath).
+```shell
+./gradlew build
+```
 
-* Metrics
+The test suite boots the full application context. Loki isn't running during tests, so the Loki appender logs
+connection-refused warnings; they don't fail the build.
 
-For Micrometer metrics with Prometheus, we need to add the io.micrometer:micrometer-registry-prometheus dependency.
+## Continuous integration and dependency updates
 
-* Tracing
+- **GitHub Actions** (`.github/workflows/gradle.yml`) builds and tests the project on Temurin JDK 25 for every push and
+  pull request to `main`, uploads test reports when the build fails, and submits the Gradle dependency graph so
+  Dependabot alerts cover every dependency.
+- **Dependabot** (`.github/dependabot.yml`) checks Gradle dependencies and GitHub Actions daily. Related updates are
+  grouped (Kotlin, Spring Boot, observability, GitHub Actions, other minor/patch bumps) so that, for example, the Kotlin
+  `jvm` and `plugin.spring` plugins always move together. Spring Boot major upgrades are ignored because they need a
+  manual migration.
 
-For Tracing Context Propagation with Micrometer Tracing, we need to pick a tracer bridge (tracer is a library that is
-used to handle the lifecycle of a span). We pick Zipkin Brave by adding the io.micrometer:
-micrometer-tracing-bridge-brave.
+## Spring Boot observability
 
-The client application that we will create for this demo will use another tracer library to show an interop between
-tracers.
-For Latency Visualization, we need to send the finished spans in some format to a server. In our case, we produce an
-Zipkin-compliant span. To achieve that, we need to add the io.zipkin.reporter2:zipkin-reporter-brave dependency.
+What is observability? It is "how well you can understand the internals of your system by examining its outputs".
+The interconnection between metrics, logging and distributed tracing lets you reason about the state of your system
+when you debug exceptions and latency in your applications.
 
-* Logs
+To add observation features to the application, `spring-boot-starter-actuator` is a must (it adds Micrometer to the
+classpath). `spring-boot-starter-aspectj` enables the `@Observed` annotation used in `MessageController`.
 
-Since we have Micrometer Tracing on the classpath, the logs are automatically correlated (that is, they contain a unique
-trace identifier). Now we need to ship the logs. For this demo, we ship them to Grafana Loki. We can achieve that by
-adding the com.github.loki4j:loki-logback-appender dependency
-
-
+- **Metrics**: for Micrometer metrics with Prometheus, add `io.micrometer:micrometer-registry-prometheus`.
+- **Tracing**: for trace context propagation with Micrometer Tracing you need a tracer bridge (the library that handles
+  the span lifecycle). This project uses Zipkin Brave via `io.micrometer:micrometer-tracing-bridge-brave`. Since
+  Spring Boot 4 the tracing auto-configuration lives in its own modules, so the project also adds
+  `spring-boot-micrometer-tracing-brave` and `spring-boot-starter-zipkin`. To visualize latency, the finished spans
+  are sent in Zipkin format (`io.zipkin.reporter2:zipkin-reporter-brave`) to Tempo.
+- **Logs**: with Micrometer Tracing on the classpath, logs are automatically correlated (they contain the trace
+  identifier). They are shipped to Grafana Loki with `com.github.loki4j:loki-logback-appender`.
