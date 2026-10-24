@@ -7,10 +7,52 @@ updates:
       time: '05:00'
       timezone: Asia/Jakarta
     open-pull-requests-limit: 10
-  - package-ecosystem: "github-actions"
+    target-branch: main
+    labels:
+      - dependencies
+      - java
+    commit-message:
+      prefix: "build(deps)"
+      prefix-development: "build(deps-dev)"
+    groups:
+      # Kotlin plugins (jvm, plugin.spring) and stdlib must always move together
+      kotlin:
+        patterns:
+          - "org.jetbrains.kotlin*"
+          - "jvm"
+          - "plugin.spring"
+      spring-boot:
+        patterns:
+          - "org.springframework.boot*"
+          - "io.spring.dependency-management*"
+      observability:
+        patterns:
+          - "io.micrometer*"
+          - "io.zipkin*"
+          - "com.github.loki4j*"
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
+    ignore:
+      # Spring Boot majors need manual migration (e.g. renamed starters in Boot 4)
+      - dependency-name: "org.springframework.boot*"
+        update-types: [ "version-update:semver-major" ]
+
+  - package-ecosystem: github-actions
     directory: "/"
     schedule:
-      interval: "daily"
+      interval: daily
       time: '05:00'
       timezone: Asia/Jakarta
     open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - github_actions
+    commit-message:
+      prefix: "ci(deps)"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+
